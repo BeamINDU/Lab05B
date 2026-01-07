@@ -1,0 +1,39 @@
+{
+  "name": "my-app",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --turbopack",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "@react-three/drei": "^9.120.4",
+    "@react-three/fiber": "^9.0.0-rc.1",
+    "axios": "^1.7.9",
+    "camera-controls": "^2.9.0",
+    "dotenv": "^16.4.7",
+    "html2canvas": "^1.4.1",
+    "jspdf": "^2.5.2",
+    "lucide-react": "^0.471.1",
+    "next": "15.0.3",
+    "or": "^0.2.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-pdf": "^9.1.1",
+    "three": "^0.172.0",
+    "three-mesh-bvh": "^0.9.0"
+  },
+  "devDependencies": {
+    "@types/node": "20.17.10",
+    "@types/prop-types": "^15.7.14",
+    "@types/react": "^18",
+    "@types/react-dom": "^18",
+    "eslint": "^8",
+    "eslint-config-next": "15.0.3",
+    "postcss": "^8",
+    "tailwindcss": "^3.4.1",
+    "typescript": "^5"
+  }
+}

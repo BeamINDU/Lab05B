@@ -1,0 +1,101 @@
+services:
+  backend:
+    build:
+      context: .
+    ports:
+      - "8000:8000"
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    # command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
+    environment:
+      - DATABASE_URL=postgresql://palletopt:palletopt@postgresDB:5432/palletopt
+      - FRONT_URL=http://localhost:4000
+      - NUMBA_THREADING_LAYER=omp
+      - NUMBA_NUM_THREADS=20        # try physical cores or ~70–80% of vCPUs
+      - MKL_NUM_THREADS=1           # stop BLAS oversubscription
+      - OPENBLAS_NUM_THREADS=1
+    volumes:
+      - ../pdf:/pdf
+      - ../logs:/logs
+      - ./app:/app/app
+    depends_on:
+      # postgresDB:
+      #   condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      celery_worker:
+        condition: service_started
+    restart: always
+    networks:
+      - pallet-optimization
+  
+  celery_worker:
+    build:
+      context: .
+    develop:
+      watch:
+        - action: sync+restart
+          path: ./app/
+          target: /app/app/
+        - action: rebuild
+          path: ./requirements.txt
+    command: ["celery", "-A", "app.celery_app", "worker", "--loglevel=info"]
+    environment:
+      - DATABASE_URL=postgresql://palletopt:palletopt@postgresDB:5432/palletopt
+      - CELERY_BROKER_URL=amqp://guest:guest@rabbitmq:5672//
+      - CELERY_RESULT_BACKEND=rpc://
+    volumes:
+      - ../pdf:/pdf
+      - ../logs:/logs
+    depends_on:
+      # postgresDB:
+      #   condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    restart: always
+    networks:
+      - pallet-optimization
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    ports:
+      - "5672:5672"
+      - "15672:15672"  # Management UI
+    environment:
+      - RABBITMQ_DEFAULT_USER=guest
+      - RABBITMQ_DEFAULT_PASS=guest
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "rabbitmq-diagnostics -q check_running"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - pallet-optimization
+  
+# postgresDB:
+#   image: postgres:16
+#   command: postgres
+#   ports:
+#     - 5434:5432
+#   environment:
+#     - POSTGRES_USER=palletopt
+#     - POSTGRES_PASSWORD=palletopt
+#     - POSTGRES_DB=palletopt
+#   volumes:
+#     - ../data:/var/lib/postgresql/data
+#   expose:
+#     - "5434"
+#   restart: always
+#   healthcheck:
+#     test: ["CMD-SHELL", "pg_isready -U palletopt -d palletopt"]
+#     interval: 3s
+#     timeout: 5s
+#     retries: 10
+#     start_period: 30s
+#   networks:
+#     - pallet-optimization
+networks:
+  pallet-optimization:
+    name: "pallet-optimization"
+    external: true

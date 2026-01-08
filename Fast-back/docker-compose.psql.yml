@@ -1,0 +1,26 @@
+services:
+  postgresDB:
+    image: postgres:16
+    command: postgres
+    ports:
+      - 5434:5432
+    environment:
+      - POSTGRES_USER=palletopt
+      - POSTGRES_PASSWORD=palletopt
+      - POSTGRES_DB=palletopt
+    volumes:
+      - ../data:/var/lib/postgresql/data
+    expose:
+      - "5434"
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U palletopt -d palletopt"]
+      interval: 3s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - pallet-optimization
+networks:
+  pallet-optimization:
+    name: "pallet-optimization"

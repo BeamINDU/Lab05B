@@ -326,26 +326,33 @@ def get_simulation_data(
     simulate_id: int, db: Session = Depends(get_db)
 ) -> schemas.SimulationGetResponse:
     try:
+        # 1. ดึง simulate entry
         simulate_entry: models.Simulate = (
             db.query(models.Simulate)
             .filter(models.Simulate.simulate_id == simulate_id)
-            .options(
-                joinedload(models.Simulate.batches).subqueryload(
-                    models.Simbatch.details
-                )
-            )
             .first()
         )
+        
         if not simulate_entry:
             raise HTTPException(
-                status_code=500, detail=f"data not found for simulateId {simulate_id}"
+                status_code=404, 
+                detail=f"data not found for simulateId {simulate_id}"
             )
+        
+        # 2. ดึง simulatetype จาก snapshot_data
+        simulatetype = "unknown"
+        if simulate_entry.snapshot_data:
+            simulatetype = simulate_entry.snapshot_data.get("simulatetype", "unknown")
+        
+        # 3. สร้าง response object
         ret = schemas.SimulationGetResponse(
             simulate_by=simulate_entry.simulate_by,
             start_datetime=simulate_entry.start_datetime,
-            simulatetype=simulate_entry.simulatetype,
+            simulatetype=simulatetype,
             simulate_status=models.Status.PENDING,
         )
+        
+        # 4. Handle status
         match simulate_entry.simulate_status:
             case models.Status.PENDING:
                 if simulate_entry.task_id and get_task_running(
@@ -355,7 +362,7 @@ def get_simulation_data(
                 simulate_entry.simulate_status = models.Status.FAILURE
                 simulate_entry.pdf_status = models.Status.FAILURE
                 simulate_entry.error_message = (
-                    "This task can’t be re-simulated. Please start a new simulation."
+                    "This task can't be re-simulated. Please start a new simulation."
                 )
                 db.commit()
                 db.refresh(simulate_entry)
@@ -364,30 +371,24 @@ def get_simulation_data(
                     simulate_entry.error_message or "Unexpected Error During Simulation"
                 )
                 return ret
+                
             case models.Status.FAILURE:
                 ret.simulate_status = models.Status.FAILURE
                 ret.error = (
                     simulate_entry.error_message or "Unexpected Error During Simulation"
                 )
                 return ret
-
-        simulateData = schemas.SimulateBase.model_validate(simulate_entry)
-
-        snapshot_data: schemas.SimulationPayload | None
-        try:
-            snapshot_data = schemas.SimulationPayload.model_validate_json(
-                simulateData.snapshot_data
-            )
-        except:
-            snapshot_data = None
-
-        reformattedSnapshot_data = utils.reformatSnapshotData(snapshot_data)
-        response_data = crud.convert_simulation_format(
-            simulateData.batches, reformattedSnapshot_data, db
-        )
+        
+        # ✅ 5. ใช้ Mock Data ก่อน (Phase 1)
+        # TODO: เมื่อทีมทำฟังก์ชันเสร็จ ให้เปลี่ยนเป็น:
+        # response_data = utils.build_lab05b_nested_data(simulate_id, db)
+        
+        response_data = get_mock_data()
+        
         ret.data = response_data
         ret.simulate_status = models.Status.SUCCESS
         return ret
+        
     except HTTPException as e:
         db.rollback()
         raise e
@@ -396,6 +397,191 @@ def get_simulation_data(
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
 
+
+def get_mock_data():
+    """
+    Mock data ตามตัวอย่างที่หัวหน้าให้มา
+    TODO: ลบฟังก์ชันนี้เมื่อทีมทำฟังก์ชันจริงเสร็จ
+    """
+    return [
+        {
+            "simulate_detail_id": 1,
+            "simulate_id": 1,
+            "package_id": 1,
+            "package_name": "Container 40ft",
+            "package_code": "CNT-40",
+            "package_type": "container",
+            "door_position": "back",
+            "have_partition": False,
+            "have_stackable": True,
+            "number_of_stack": 2,
+            "package_width": 2350,
+            "package_length": 12000,
+            "package_height": 2700,
+            "package_weight": 3800,
+            "load_width": 2300,
+            "load_length": 11800,
+            "load_height": 2600,
+            "load_weight": 28000,
+            "is_stack": False,
+            "max_stack": 0,
+            "stack_weight": 0,
+            "is_fragile": False,
+            "is_side_up": False,
+            "is_on_top": False,
+            "color": "#0d9488",
+            "rotation": 0,
+            "position_x": 0,
+            "position_y": 0,
+            "position_z": 0,
+            "utilize_weight": 18500,
+            "utilize_weight_percent": 66.07,
+            "utilize_capacity": 75.5,
+            "utilize_cap_percent": 75.5,
+            "orders": [],
+            "child_detail": [
+                {
+                    "simulate_detail_id": 2,
+                    "simulate_id": 1,
+                    "package_id": 10,
+                    "package_name": "Euro Pallet",
+                    "package_code": "PLT-EUR-01",
+                    "package_type": "pallet",
+                    "door_position": "",
+                    "package_width": 800,
+                    "package_length": 1200,
+                    "package_height": 1500,
+                    "package_weight": 25,
+                    "load_width": 780,
+                    "load_length": 1180,
+                    "load_height": 1350,
+                    "load_weight": 1000,
+                    "is_stack": False,
+                    "max_stack": 0,
+                    "stack_weight": 0,
+                    "is_fragile": False,
+                    "is_side_up": False,
+                    "is_on_top": False,
+                    "color": "#16a34a",
+                    "rotation": 0,
+                    "position_x": 0,
+                    "position_y": 0,
+                    "position_z": 0,
+                    "utilize_weight": 850,
+                    "utilize_weight_percent": 85.0,
+                    "utilize_capacity": 72.3,
+                    "utilize_cap_percent": 72.3,
+                    "orders": [],
+                    "child_detail": [
+                        {
+                            "simulate_detail_id": 4,
+                            "simulate_id": 1,
+                            "package_id": 20,
+                            "package_name": "Medium Carton",
+                            "package_code": "CTN-MED-01",
+                            "package_type": "carton",
+                            "door_position": "",
+                            "package_width": 300,
+                            "package_length": 400,
+                            "package_height": 300,
+                            "package_weight": 0.5,
+                            "load_width": 290,
+                            "load_length": 390,
+                            "load_height": 290,
+                            "load_weight": 25,
+                            "is_stack": True,
+                            "max_stack": 4,
+                            "stack_weight": 100,
+                            "is_fragile": False,
+                            "is_side_up": False,
+                            "is_on_top": False,
+                            "color": "#ea580c",
+                            "rotation": 0,
+                            "position_x": 0,
+                            "position_y": 0,
+                            "position_z": 0,
+                            "utilize_weight": 18.5,
+                            "utilize_weight_percent": 74.0,
+                            "utilize_capacity": 68.2,
+                            "utilize_cap_percent": 68.2,
+                            "child_detail": [],
+                            "orders": [
+                                {
+                                    "orders_id": 1,
+                                    "orders_number": "ORD-2024-001",
+                                    "orders_name": "Customer A Order",
+                                    "plan_send_date": "2024-01-15",
+                                    "created_date": "2024-01-10",
+                                    "created_by": "admin",
+                                    "orders_detail": [
+                                        {
+                                            "orders_detail_id": 1,
+                                            "orders_id": 1,
+                                            "product_id": 101,
+                                            "product_code": "PRD-A001",
+                                            "product_name": "Widget A",
+                                            "qty": 10,
+                                            "pickup_priority": 1,
+                                            "dropoff_priority": 1,
+                                            "product": {
+                                                "product_id": 101,
+                                                "product_code": "PRD-A001",
+                                                "product_name": "Widget A",
+                                                "product_length": 100,
+                                                "product_width": 80,
+                                                "product_height": 50,
+                                                "product_weight": 1.5,
+                                                "is_fragile": False,
+                                                "is_side_up": False,
+                                                "is_on_top": False,
+                                                "is_stack": True,
+                                                "max_stack": 5,
+                                                "stack_weight": 10,
+                                                "color": "#3b82f6"
+                                            }
+                                        }
+                                    ],
+                                    "products": [
+                                        {
+                                            "simulate_product_id": 1,
+                                            "simulate_id": 1,
+                                            "simulate_detail_id": 4,
+                                            "orders_id": 1,
+                                            "product_id": 101,
+                                            "product_code": "PRD-A001",
+                                            "product_name": "Widget A",
+                                            "pickup_priority": 1,
+                                            "dropoff_priority": 1,
+                                            "product": {
+                                                "product_id": 101,
+                                                "product_code": "PRD-A001",
+                                                "product_name": "Widget A",
+                                                "product_length": 100,
+                                                "product_width": 80,
+                                                "product_height": 50,
+                                                "product_weight": 1.5,
+                                                "is_fragile": False,
+                                                "is_side_up": False,
+                                                "is_on_top": False,
+                                                "is_stack": True,
+                                                "max_stack": 5,
+                                                "stack_weight": 10,
+                                                "color": "#3b82f6"
+                                            },
+                                            "rotation": 0,
+                                            "position_x": 10,
+                                            "position_y": 10,
+                                            "position_z": 0
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
 
 @router.get(
     "/snapshot",

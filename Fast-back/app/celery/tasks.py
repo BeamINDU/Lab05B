@@ -4,7 +4,7 @@ import time
 from fastapi import HTTPException, Depends
 from sqlalchemy.orm import scoped_session
 from app.database import SessionLocal
-from app import schemas, crud, models, pdf, utils
+from app import schemas, crud, models, pdf_mock, utils
 from app.logger import logger
 
 ScopedSession = scoped_session(SessionLocal)
@@ -15,7 +15,7 @@ __all__ = ["celery_app", "long_running_task"]
 @celery_app.task(name="pdf", bind=True, pydantic=True, time_limit=1800)
 def pdfTask(
     self,
-    payload: schemas.SimulationGetResponse,
+    payload: dict,  # ✅ รับเป็น dict
     simulate_id: int,
 ) -> int:
     db = ScopedSession()
@@ -26,51 +26,44 @@ def pdfTask(
             .filter(models.Simulate.simulate_id == simulate_id)
             .first()
         )
+        
         if not simulate_entry:
             raise Exception(f"data not found for simulateId {simulate_id}")
 
         try:
             if simulate_entry.simulate_status != models.Status.SUCCESS:
                 raise Exception(
-                    f"simulation simulate_status is {simulate_entry.simulate_status} for simulateId {simulate_id}"
+                    f"simulation simulate_status is {simulate_entry.simulate_status}"
                 )
 
             start_time = time.perf_counter()
-            pdf.create_report(payload, simulate_id)
+            
+            # ✅ ใช้ pdf_mock แทน pdf (สำหรับ Phase 1)
+            # TODO: Phase 2 เปลี่ยนกลับเป็น pdf.create_report()
+            pdf_mock.create_report(payload, simulate_id)
+            
             end_time = time.perf_counter()
-            # save to database
+            
             simulate_entry.pdf_status = models.Status.SUCCESS
             db.commit()
 
             elapsed_time = end_time - start_time
-            logger.info(
-                f"Pdf Task with id: {self.request.id} completed after {elapsed_time} seconds"
-            )
+            logger.info(f"Pdf Task completed after {elapsed_time} seconds")
+            
             return {
                 "simulate_status": models.Status.SUCCESS,
                 "message": f"Pdf Task completed after {elapsed_time} seconds",
             }
 
-        except HTTPException as e:
-            db.rollback()
-            if not simulate_entry:
-                raise Exception(f"data not found for simulateId {simulate_id}")
-            simulate_entry.pdf_status = models.Status.FAILURE
-            simulate_entry.error_message = e.detail
-            db.commit()
-
-            raise Exception(e.detail)
         except Exception as e:
             db.rollback()
-            if not simulate_entry:
-                raise Exception(f"data not found for simulateId {simulate_id}")
             simulate_entry.pdf_status = models.Status.FAILURE
             simulate_entry.error_message = str(e)
             db.commit()
-
             raise e
+            
     except Exception as e:
-        logger.info(f"Pdf Task with id: {self.request.id} Failed")
+        logger.info(f"Pdf Task Failed: {str(e)}")
         raise e
     finally:
         db.close()

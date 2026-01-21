@@ -1,5 +1,4 @@
 from fastapi import FastAPI
-from .database import engine, Base
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 import os
@@ -17,7 +16,6 @@ from .routes import (
 load_dotenv()  # โหลดค่าจากไฟล์ .env
 
 # สร้างตาราง
-Base.metadata.create_all(bind=engine)
 BASE_PATH = os.getenv("PYTHONPATH", ".")
 FRONT_URL = os.getenv("FRONT_URL", "http://192.168.11.97:3000")
 

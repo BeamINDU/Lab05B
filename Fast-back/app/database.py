@@ -9,7 +9,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 DATABASE_URL = os.getenv(
-    "DATABASE_URL", "postgresql://palletopt:palletopt@54.151.235.122:5432/palletopt"
+    "DATABASE_URL", "postgresql://palletopt:palletopt@192.168.11.97:5436/palletopt"
 )
 
 

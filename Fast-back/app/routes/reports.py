@@ -9,6 +9,11 @@ import os
 
 router = APIRouter(tags=["Reports"])
 
+def get_simulatetype(simulate_entry):
+    """ดึง simulatetype จาก snapshot_data"""
+    if simulate_entry.snapshot_data:
+        return simulate_entry.snapshot_data.get("simulatetype", "unknown")
+    return "unknown"
 
 @router.get("/pdf/")
 def get_pdf(simulate_id: int, db: Session = Depends(get_db)):
@@ -23,6 +28,9 @@ def get_pdf(simulate_id: int, db: Session = Depends(get_db)):
             raise HTTPException(
                 status_code=500, detail=f"data not found for simulateId {simulate_id}"
             )
+        
+        simulatetype = get_simulatetype(simulate_entry)
+
         match simulate_entry.pdf_status:
             case models.Status.PENDING:
                 if simulate_entry.pdf_task_id and get_task_running(
@@ -31,7 +39,7 @@ def get_pdf(simulate_id: int, db: Session = Depends(get_db)):
                     return {
                         "simulate_by": simulate_entry.simulate_by,
                         "start_datetime": simulate_entry.start_datetime,
-                        "simulatetype": simulate_entry.simulatetype,
+                        "simulatetype": simulatetype,
                         "simulate_status": models.Status.PENDING,
                     }
                 simulate_entry.pdf_status = models.Status.FAILURE
@@ -43,7 +51,7 @@ def get_pdf(simulate_id: int, db: Session = Depends(get_db)):
                 return {
                     "simulate_by": simulate_entry.simulate_by,
                     "start_datetime": simulate_entry.start_datetime,
-                    "simulatetype": simulate_entry.simulatetype,
+                    "simulatetype": simulatetype,
                     "simulate_status": models.Status.FAILURE,
                     "error": simulate_entry.error_message
                     or "Unexpected Error During Simulation",
@@ -52,7 +60,7 @@ def get_pdf(simulate_id: int, db: Session = Depends(get_db)):
                 return {
                     "simulate_by": simulate_entry.simulate_by,
                     "start_datetime": simulate_entry.start_datetime,
-                    "simulatetype": simulate_entry.simulatetype,
+                    "simulatetype": simulatetype,
                     "simulate_status": models.Status.FAILURE,
                     "error": simulate_entry.error_message
                     or "Unexpected Error During PDF Generation.",
@@ -61,7 +69,7 @@ def get_pdf(simulate_id: int, db: Session = Depends(get_db)):
             return {
                 "simulate_by": simulate_entry.simulate_by,
                 "start_datetime": simulate_entry.start_datetime,
-                "simulatetype": simulate_entry.simulatetype,
+                "simulatetype": simulatetype,
                 "simulate_status": models.Status.FAILURE,
                 "error": f"Simulation simulate_status is {simulate_entry.simulate_status.value}.",
             }
@@ -76,7 +84,7 @@ def get_pdf(simulate_id: int, db: Session = Depends(get_db)):
         return {
             "simulate_by": simulate_entry.simulate_by,
             "start_datetime": simulate_entry.start_datetime,
-            "simulatetype": simulate_entry.simulatetype,
+            "simulatetype": simulatetype,
             "simulate_status": models.Status.PENDING,
         }
 
@@ -163,8 +171,10 @@ async def delete_report(simulate_id: str, db: Session = Depends(get_db)):
 @router.get("/success")
 async def get_success_simu(db: Session = Depends(get_db)):
     try:
-        # ดึง simulate_id ที่มีอยู่ใน sim_batch
-        batches = db.query(models.Simbatch.simulate_id).distinct().all()
-        return [{"simulate_id": batch.simulate_id} for batch in batches]
+        simulations = db.query(models.Simulate).filter(
+            models.Simulate.simulate_status == models.Status.SUCCESS
+        ).order_by(models.Simulate.simulate_id.desc()).all()
+        
+        return [{"simulate_id": sim.simulate_id} for sim in simulations]
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

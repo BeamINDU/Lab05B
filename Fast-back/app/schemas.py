@@ -618,7 +618,7 @@ class SimulationPayload(BaseModel):
 
 
 class SimulationGetResponse(BaseModel):
-    data: Optional[list[SimBatch]] = None
+    data: Optional[list[dict]] = None
     error: Optional[str] = None
     simulate_by: str
     start_datetime: datetime

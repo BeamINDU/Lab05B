@@ -4,7 +4,7 @@ import time
 from fastapi import HTTPException, Depends
 from sqlalchemy.orm import scoped_session
 from app.database import SessionLocal
-from app import schemas, crud, models, pdf_mock, utils
+from app import schemas, crud, models, pdf, utils
 from app.logger import logger
 
 ScopedSession = scoped_session(SessionLocal)
@@ -15,7 +15,7 @@ __all__ = ["celery_app", "long_running_task"]
 @celery_app.task(name="pdf", bind=True, pydantic=True, time_limit=1800)
 def pdfTask(
     self,
-    payload: dict,  # ✅ รับเป็น dict
+    payload: dict,
     simulate_id: int,
 ) -> int:
     db = ScopedSession()
@@ -38,9 +38,8 @@ def pdfTask(
 
             start_time = time.perf_counter()
             
-            # ✅ ใช้ pdf_mock แทน pdf (สำหรับ Phase 1)
-            # TODO: Phase 2 เปลี่ยนกลับเป็น pdf.create_report()
-            pdf_mock.create_report(payload, simulate_id)
+
+            pdf.create_report(payload, simulate_id)
             
             end_time = time.perf_counter()
             

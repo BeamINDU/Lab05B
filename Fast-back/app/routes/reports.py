@@ -18,91 +18,58 @@ def get_simulatetype(simulate_entry):
 @router.get("/pdf/")
 def get_pdf(simulate_id: int, db: Session = Depends(get_db)):
     pdf_path = f"/pdf/{simulate_id}.pdf"
-    if not os.path.exists(pdf_path):
-        simulate_entry: models.Simulate = (
-            db.query(models.Simulate)
-            .filter(models.Simulate.simulate_id == simulate_id)
-            .first()
-        )
-        if not simulate_entry:
-            raise HTTPException(
-                status_code=500, detail=f"data not found for simulateId {simulate_id}"
-            )
+    
+    # ✅ ถ้ามี PDF อยู่แล้ว → return เลย
+    if os.path.exists(pdf_path):
+        with open(pdf_path, "rb") as pdf_file:
+            pdf_content = pdf_file.read()
         
-        simulatetype = get_simulatetype(simulate_entry)
-
-        match simulate_entry.pdf_status:
-            case models.Status.PENDING:
-                if simulate_entry.pdf_task_id and get_task_running(
-                    simulate_entry.pdf_task_id, "pdf"
-                ):
-                    return {
-                        "simulate_by": simulate_entry.simulate_by,
-                        "start_datetime": simulate_entry.start_datetime,
-                        "simulatetype": simulatetype,
-                        "simulate_status": models.Status.PENDING,
-                    }
-                simulate_entry.pdf_status = models.Status.FAILURE
-                simulate_entry.error_message = (
-                    "This task can’t be re-simulated. Please start a new simulation."
-                )
-                db.commit()
-                db.refresh(simulate_entry)
-                return {
-                    "simulate_by": simulate_entry.simulate_by,
-                    "start_datetime": simulate_entry.start_datetime,
-                    "simulatetype": simulatetype,
-                    "simulate_status": models.Status.FAILURE,
-                    "error": simulate_entry.error_message
-                    or "Unexpected Error During Simulation",
-                }
-            case models.Status.FAILURE:
-                return {
-                    "simulate_by": simulate_entry.simulate_by,
-                    "start_datetime": simulate_entry.start_datetime,
-                    "simulatetype": simulatetype,
-                    "simulate_status": models.Status.FAILURE,
-                    "error": simulate_entry.error_message
-                    or "Unexpected Error During PDF Generation.",
-                }
-        if simulate_entry.simulate_status != models.Status.SUCCESS:
-            return {
-                "simulate_by": simulate_entry.simulate_by,
-                "start_datetime": simulate_entry.start_datetime,
-                "simulatetype": simulatetype,
-                "simulate_status": models.Status.FAILURE,
-                "error": f"Simulation simulate_status is {simulate_entry.simulate_status.value}.",
-            }
-
+        return Response(
+            content=pdf_content,
+            media_type="application/pdf",
+            headers={"Content-Disposition": "inline; filename=document.pdf"},
+        )
+    
+    # ดึงข้อมูล simulate
+    simulate_entry: models.Simulate = (
+        db.query(models.Simulate)
+        .filter(models.Simulate.simulate_id == simulate_id)
+        .first()
+    )
+    
+    if not simulate_entry:
+        raise HTTPException(
+            status_code=404, 
+            detail=f"data not found for simulateId {simulate_id}"
+        )
+    
+    simulatetype = get_simulatetype(simulate_entry)
+    
+    # ✅ สำหรับ Phase 1 (Mock Data) - ไม่สนใจ status
+    # แค่ดึงข้อมูลแล้วสร้าง PDF เลย
+    try:
+        # ดึงข้อมูล (จะได้ mock data)
         simdata = get_simulation_data(simulate_id, db)
-
+        
+        # สร้าง PDF task
         task = pdfTask.delay(simdata.model_dump(), simulate_id)
-
+        
+        # Update status
         simulate_entry.pdf_status = models.Status.PENDING
         simulate_entry.pdf_task_id = task.id
+        simulate_entry.error_message = None
         db.commit()
+        
         return {
             "simulate_by": simulate_entry.simulate_by,
             "start_datetime": simulate_entry.start_datetime,
             "simulatetype": simulatetype,
-            "simulate_status": models.Status.PENDING,
+            "status": "PENDING",
+            "message": "PDF generation started"
         }
-
-    if not os.path.exists(pdf_path):
-        return Response(
-            content="PDF file not found", media_type="text/plain", status_code=500
-        )
-
-    with open(pdf_path, "rb") as pdf_file:
-        pdf_content = pdf_file.read()
-
-    return Response(
-        content=pdf_content,
-        media_type="application/pdf",
-        headers={
-            "Content-Disposition": "inline; filename=document.pdf"
-        },  # "inline" to display in browser, "attachment" to download
-    )
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/")
